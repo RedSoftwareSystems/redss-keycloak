@@ -1,0 +1,17 @@
+{
+  "CN": "redss-local",
+  "hosts": ["auth.redss.local"],
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "IT",
+      "ST": "MB",
+      "L": "Monza",
+      "O": "redss",
+      "OU": "local"
+    }
+  ]
+}

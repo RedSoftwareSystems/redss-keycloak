@@ -1,0 +1,95 @@
+x-logging: &logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  keycloak-db:
+    container_name: redss-keycloak-db
+    build:
+      dockerfile: Dockerfile
+      context: ./keycloak-db/
+    ports:
+      - 5432
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "keycloak"]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-keycloak}
+      POSTGRES_USER: ${POSTGRES_USER:-keycloak}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    volumes:
+      - keycloak-db:/var/lib/postgresql/data
+    logging: *logging
+    networks:
+      - keycloaknet
+  redss-keycloak:
+    container_name: redss-keycloak
+    image: quay.io/keycloak/keycloak:${KC_VERSION:-26.2.3}
+    command:
+      [
+        "start",
+        "--hostname=https://${KC_HOSTNAME:-auth.redss.local}",
+        "--http-enabled=true",
+        "--proxy-headers=forwarded",
+      ]
+    restart: unless-stopped
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    environment:
+      KC_DB: postgres
+      KC_DB_USERNAME: ${POSTGRES_USER:-keycloak}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      KC_DB_SCHEMA: keycloak
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_METRICS_ENABLED: true
+      KC_LOG_LEVEL: ${KC_LOG_LEVEL:-INFO}
+      KC_REALM_NAME: ${KC_REALM_NAME:-redss}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-keycloak}
+    ports:
+      - 8080:8080
+    volumes:
+      - keycloak-backup:/opt/keycloak/backup
+    logging: *logging
+    networks:
+      - keycloaknet
+  keycloak-web:
+    container_name: keycloak-web
+    image: nginx:1.27.5
+    environment:
+      - NGINX_AUTH_HOST=${KC_HOSTNAME:-auth.redss.local}
+      - NGINX_SSLPORT=443
+      - NGINX_PORT=80
+      - SSL_CERTIFICATE=/ssl/server.pem
+      - SSL_CERTIFICATE_KEY=/ssl/server-key.pem
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:443:443"
+      - "${BIND_ADDRESS:-0.0.0.0}:80:80"
+    # depends_on:
+    # redss-keycloak:
+    #   condition: service_healthy
+    #   restart: true
+    volumes:
+      - ./www/templates:/etc/nginx/templates:ro
+      - ssl:/ssl:ro
+    networks:
+      - keycloaknet
+    extra_hosts:
+      - "${KC_HOSTNAME:-auth.redss.local}:172.18.0.1"
+
+networks:
+  keycloaknet:
+    driver: bridge
+    name: keycloaknet
+volumes:
+  keycloak-db:
+  keycloak-backup:
+  ssl:
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: ./tls/certs

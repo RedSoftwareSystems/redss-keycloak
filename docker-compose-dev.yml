@@ -50,7 +50,7 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-keycloak}
     ports:
-      - 8080:8080
+      - 8080
     volumes:
       - keycloak-backup:/opt/keycloak/backup
     logging: *logging
@@ -59,6 +59,7 @@ services:
   keycloak-web:
     container_name: keycloak-web
     image: nginx:1.27.5
+    restart: unless-stopped
     environment:
       - NGINX_AUTH_HOST=${KC_HOSTNAME:-auth.redss.local}
       - NGINX_SSLPORT=443
@@ -68,10 +69,6 @@ services:
     ports:
       - "${BIND_ADDRESS:-0.0.0.0}:443:443"
       - "${BIND_ADDRESS:-0.0.0.0}:80:80"
-    # depends_on:
-    # redss-keycloak:
-    #   condition: service_healthy
-    #   restart: true
     volumes:
       - ./www/templates:/etc/nginx/templates:ro
       - ssl:/ssl:ro
